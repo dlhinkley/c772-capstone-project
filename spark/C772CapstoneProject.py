@@ -1,5 +1,11 @@
 # Databricks notebook source
+# MAGIC %md
+# MAGIC # Data Exploration
+
+# COMMAND ----------
+
 # DBTITLE 1,Load Assessment Items Data
+# Load Assessment Items Data
 from pyspark import SparkFiles
 
 url = 'https://github.com/dlhinkley/c772-capstone-project/raw/master/data/assessment_items.csv'
@@ -25,56 +31,41 @@ dfDesc = spark.read.format('com.databricks.spark.csv').options(header='true', in
 
 # COMMAND ----------
 
-# DBTITLE 1,Save as Database View
-# Save as database view
-dfRaw.createOrReplaceTempView("raw_data")
-dfRaw.cache()
+# DBTITLE 1,Display Variable Categories
+from pyspark.sql.functions import col
 
-
-# COMMAND ----------
-
-# DBTITLE 1,Save Continous Describe Data
-# Describe data
-desc = dfRaw.describe()
-
-# COMMAND ----------
-
-# DBTITLE 1,Save Variable Categories
-from pyspark.sql import functions as F
 # Save field names
-identifierFields = dfDesc.filter("type = 'Categorical Identifier'").select("field")
-nominalFields    = dfDesc.filter("type = 'Categorical Nominal'").select("field")
-continousFields  = dfDesc.filter("type = 'Numeric Continous'").select("field")
-intervalFields   = dfDesc.filter("type = 'Categorical Interval'").select("field")
-binaryFields     = dfDesc.filter("type = 'Categorical Binary'").select("field")
+identifierFieldRows = dfDesc.filter("type = 'Categorical Identifier'")
+identifierFields = [row['field'] for row in identifierFieldRows.select("field").collect()]
+identifierFieldRows.select(col("field").alias('Categorical Identifier')).show(20,False)
+
+nominalFieldRows    = dfDesc.filter("type = 'Categorical Nominal'")
+nominalFields = [row['field'] for row in nominalFieldRows.select("field").collect()]
+nominalFieldRows.select(col("field").alias('Categorical Nominal')).show(20,False)
+
+continousFieldRows  = dfDesc.filter("type = 'Numeric Continuous'")
+continousFields = [row['field'] for row in continousFieldRows.select("field").collect()]
+continousFieldRows.select(col("field").alias('Numeric Continuous')).show(20,False)
+
+intervalFieldRows   = dfDesc.filter("type = 'Categorical Interval'")
+intervalFields = [row['field'] for row in intervalFieldRows.select("field").collect()]
+intervalFieldRows.select(col("field").alias('Categorical Interval')).show(20,False)
+
+binaryFieldRows     = dfDesc.filter("type = 'Categorical Binary'")
+binaryFields = [row['field'] for row in binaryFieldRows.select("field").collect()]
+binaryFieldRows.select(col("field").alias('Categorical Binary')).show(20,False)
+
 
 # COMMAND ----------
 
-#continousFields.show(40,False)
-desc.select("summary",
-            "assignment_attempt_number",
-            "assignment_max_attempts" ,
-            "final_score_unweighted",
-            "number_of_distinct_instance_items",
-            "number_of_learners",
-            "points_possible_unweighted" ).show(5,False)
+# DBTITLE 1,Set Date Fields to Timestamp Type
+# Set empty dates to null
+from pyspark.sql.functions import col
+from pyspark.sql.types import TimestampType
 
-# COMMAND ----------
+for f in intervalFields:
+  dfRaw = dfRaw.withColumn(f, col(f).cast(TimestampType() ) )
 
-#nominalFields.show(40,False)
-desc.select("summary",
-            "assigned_item_status",
-            "ced_assignment_type_code" ,
-            "item_type_code_name",
-            "learner_attempt_status",
-            "response_correctness",
-            "scoring_type_code" ).show(5,False)
-
-# COMMAND ----------
-
-# DBTITLE 1,Number of Records
-# Display number of records
-sqlContext.sql("SELECT is_deleted FROM raw_data").show(1)
 
 # COMMAND ----------
 
@@ -84,35 +75,79 @@ dfRaw.printSchema()
 
 # COMMAND ----------
 
-# DBTITLE 1,Identifier Data Summary
-# Identifier Data Summary
-from pyspark.sql.functions import countDistinct
-from functools import partial
-from pyspark.sql import Row
+# DBTITLE 1,Save as Database View
+# Save as database view
+dfRaw.createOrReplaceTempView("raw_data")
 
-# Convert columns to rows
-def flatten_table(column_names, column_values):
-    row = zip(column_names, column_values)
-    _, key = next(row)  # Special casing retrieving the first column
-    return [
-        Row(Variable=column, Observations=value)
-        for column, value in row
-    ]
 
-# Get the observation count with each type of record
-counts = dfRaw.agg( 
-  countDistinct("assessment_sk").alias("assessment_sk"), 
-  countDistinct("assessment_instance_sk").alias("assessment_instance_sk"), 
-  countDistinct("learner_assignment_attempt_sk").alias("learner_assignment_attempt_sk"), 
-  countDistinct("assessment_instance_attempt_sk").alias("assessment_instance_attempt_sk"),  
-  countDistinct("learner_assigned_item_attempt_sk").alias("learner_assigned_item_attempt_sk"), 
-  countDistinct("assessment_item_response_sk").alias("assessment_item_response_sk"), 
-  countDistinct("learner_sk").alias("learner_sk"), 
-  countDistinct("section_sk").alias("section_sk"), 
-  countDistinct("org_sk").alias("org_sk")
-)
-# Display the counts
-counts.rdd.flatMap(partial(flatten_table, counts.columns)).toDF().sort('Variable').show(9, False)
+# COMMAND ----------
+
+# DBTITLE 1,Categorical / Identifier Variables
+from pyspark.sql.functions import when, count, col, countDistinct
+
+for f in identifierFields:
+  print(f)
+  dfRaw.agg(
+    countDistinct(f).alias("unique"), 
+    count(when(col(f).isNull(), f)).alias("null")
+  ).show()
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Categorical / Nominal Variables
+# Categorical / Nominal Values
+for f in nominalFields:
+  print(f)
+  dfRaw.cube(f).count().sort("count", ascending=False).show()
+
+# COMMAND ----------
+
+# DBTITLE 1,Numerical / Continuous Variables
+# Numerical / Continuous Variables
+desc = dfRaw.describe()
+for f in continousFields:
+  print(f)
+  desc.select("summary", f).show(5,False)
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Numerical / Continuous Histograms
+for f in continousFields:
+  print(f)
+  dfRaw.select(f).toPandas().hist()
+
+# COMMAND ----------
+
+# DBTITLE 1,Null Numerical / Continuous Variables
+from pyspark.sql.functions import count, when, col
+
+for c in continousFields:
+  print(c)
+  dfRaw.agg(
+    count(when(col(c).isNull(), c)).alias("null")
+  ).show()
+
+# COMMAND ----------
+
+dfRaw.select('assignment_due_date').summary().show()
+#intervalFields
+
+# COMMAND ----------
+
+# DBTITLE 1,Categorical / Interval Variables
+# Categorical / Interval Variables
+sqlIn = "IN('2999-01-01 00:00:00', '1900-01-01 00:00:00')"
+
+for f in intervalFields:
+  print(f)
+  sqlContext.sql("SELECT \
+                 (SELECT COUNT(*) FROM raw_data WHERE " + f + " " + sqlIn + " ) AS null, \
+                 (SELECT MIN(" + f + ") FROM raw_data WHERE " + f + " NOT " + sqlIn + ") AS min, \
+                 (SELECT MAX(" + f + ") FROM raw_data WHERE " + f + " NOT " + sqlIn + ") AS max \
+                 ").show(1, False)
+
 
 # COMMAND ----------
 
@@ -123,13 +158,62 @@ sqlContext.sql("SELECT count(distinct is_deleted) FROM raw_data WHERE is_deleted
 
 # COMMAND ----------
 
-dfRaw.summary()
+# MAGIC %md
+# MAGIC # Data Cleaning
+
+# COMMAND ----------
+
+# DBTITLE 1,Create Clean Data Frame
+dfClean = dfRaw
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Convert Default / Empty Dates to NULL
+
+# COMMAND ----------
+
+# DBTITLE 1,Count Default / Empty Dates
+# Count Default / Empty Dates
+
+for f in intervalFields:
+  row = dfClean.filter( (col(f) == '2999-01-01 00:00:00') | (col(f) == '1900-01-01 00:00:00') ).select(count(f).alias("null")).collect()
+  found = row[0][0]
+  if (found > 0):
+    print (f,"=", found)
+
+# COMMAND ----------
+
+# DBTITLE 1,Set Default / Empty Dates To NULL
+# Set empty dates to null
+from pyspark.sql.functions import when, col
+
+for f in intervalFields:
+  dfClean = dfClean.withColumn(f, when((col(f) == '2999-01-01 00:00:00') | (col(f) == '1900-01-01 00:00:00'), None ).otherwise( col(f) ) )
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Confirm Default / Empty Dates Removed
+# Count Default / Empty Dates
+exists = 0
+for f in intervalFields:
+  row = dfClean.filter( (col(f) == '2999-01-01 00:00:00') | (col(f) == '1900-01-01 00:00:00') ).select(count(f).alias("null")).collect()
+  found = row[0][0]
+  if (found > 0):
+    exists += 1
+    print (f,"=", found)
+    
+if (exists == 0):
+  print ("None Found")
+else:
+  print ("Found", exists)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Data Conversion
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC SELECT COUNT(*) FROM raw_data where is_deleted;
-
-# COMMAND ----------
-
-
