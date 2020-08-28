@@ -58,7 +58,7 @@ binaryFieldRows.select(col("field").alias('Categorical Binary')).show(20,False)
 
 # COMMAND ----------
 
-# DBTITLE 1,Set Date Fields to Timestamp Type
+# DBTITLE 1,Change Date Fields from String to Timestamp Type
 # Set empty dates to null
 from pyspark.sql.functions import col
 from pyspark.sql.types import TimestampType
@@ -98,8 +98,23 @@ for f in identifierFields:
 # DBTITLE 1,Categorical / Nominal Variables
 # Categorical / Nominal Values
 for f in nominalFields:
-  print(f)
-  dfRaw.cube(f).count().sort("count", ascending=False).show()
+  dfRaw.groupBy(f).count().orderBy("count", ascending=False).show(50, False)
+  
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Null Values
+# MAGIC - response_correctness
+# MAGIC   - Investigate further
+# MAGIC   - Could be null because the question wasn't answered or a different method of scoring the question
+# MAGIC - item_type_code_name
+# MAGIC   - Investigate further
+# MAGIC   - Could be related to unstarted or unanswered questions
+# MAGIC #### large number of categorical values
+# MAGIC - item_type_code_name
+# MAGIC   - Need to transform by reclassifying to reduce number of categories
+# MAGIC   
 
 # COMMAND ----------
 
@@ -107,7 +122,6 @@ for f in nominalFields:
 # Numerical / Continuous Variables
 desc = dfRaw.describe()
 for f in continousFields:
-  print(f)
   desc.select("summary", f).show(5,False)
 
 
@@ -117,6 +131,22 @@ for f in continousFields:
 for f in continousFields:
   print(f)
   dfRaw.select(f).toPandas().hist()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Normal Distribution
+# MAGIC - number_of_learners
+# MAGIC 
+# MAGIC Right Skewed
+# MAGIC - final_score_unweighted
+# MAGIC - number_of_distinct_instance_items
+# MAGIC - points_possible_unweighted
+# MAGIC 
+# MAGIC Two Values (0/1)
+# MAGIC - assignment_max_attempts
+# MAGIC - assignment_attempt_number
+# MAGIC - Appears binary but the variable name indicates it could have any values. The data only contains 1 and 0
 
 # COMMAND ----------
 
@@ -131,23 +161,46 @@ for c in continousFields:
 
 # COMMAND ----------
 
-dfRaw.select('assignment_due_date').summary().show()
-#intervalFields
+# DBTITLE 1,Categorical / Interval Variables
+from pyspark.sql.functions import countDistinct, count, when, col, min, max
+
+for f in intervalFields:
+  print (f)
+  dfRaw.agg(
+    countDistinct(f).alias("unique"), 
+    count(when(col(f).isNull(), f)).alias("null"),
+    min(f).alias("min"),
+    max(f).alias("max")
+ ).show(1, False)
+
 
 # COMMAND ----------
 
-# DBTITLE 1,Categorical / Interval Variables
+# MAGIC %md
+# MAGIC Some dates have default values '2999-01-01 00:00:00' as max and '1900-01-01 00:00:00' as min
+# MAGIC These are substitutes for no value and will need to be replaced nulls
+
+# COMMAND ----------
+
+# DBTITLE 1,Categorical / Interval Variables (exclude defaults)
+from pyspark.sql.functions import countDistinct, count, when, col, min, max
+
 # Categorical / Interval Variables
-sqlIn = "IN('2999-01-01 00:00:00', '1900-01-01 00:00:00')"
+defaults = ["2999-01-01 00:00:00","1900-01-01 00:00:00"]
 
 for f in intervalFields:
-  print(f)
-  sqlContext.sql("SELECT \
-                 (SELECT COUNT(*) FROM raw_data WHERE " + f + " " + sqlIn + " ) AS null, \
-                 (SELECT MIN(" + f + ") FROM raw_data WHERE " + f + " NOT " + sqlIn + ") AS min, \
-                 (SELECT MAX(" + f + ") FROM raw_data WHERE " + f + " NOT " + sqlIn + ") AS max \
-                 ").show(1, False)
+  print (f)
+  dfRaw.agg(
+    countDistinct(f).alias("unique"), 
+    count( when(col(f).isNull(), f)).alias("null"),
+    min( when(col(f).isin(defaults) == False, col(f) )).alias("min"),
+    max( when(col(f).isin(defaults) == False, col(f) )).alias("max")
+ ).show(1, False)
 
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Dates fall in range of a school year of 8/2019 to 5/2020
 
 # COMMAND ----------
 
@@ -208,6 +261,32 @@ if (exists == 0):
   print ("None Found")
 else:
   print ("Found", exists)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC All default dates converted
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Reclassify categories in item_type_code_name
+
+# COMMAND ----------
+
+# DBTITLE 1,Existing Categories
+# Before Categories
+catResults = dfRaw.filter(col("item_type_code_name").isNull() == False).groupBy("item_type_code_name").count().orderBy("count", ascending=False).toPandas()
+catResults.plot.bar(x='item_type_code_name', y='count')
+
+# COMMAND ----------
+
+catResults
+
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
