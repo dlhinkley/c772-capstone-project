@@ -276,15 +276,43 @@ else:
 
 # DBTITLE 1,Existing Categories
 # Before Categories
-catResults = dfRaw.filter(col("item_type_code_name").isNull() == False).groupBy("item_type_code_name").count().orderBy("count", ascending=False).toPandas()
+catResults = dfClean.filter(col("item_type_code_name").isNull() == False).groupBy("item_type_code_name").count().orderBy("count", ascending=False).toPandas()
 catResults.plot.bar(x='item_type_code_name', y='count')
 
 # COMMAND ----------
 
-catResults
+from pyspark.sql.functions import col, round
+
+tot = dfClean.filter(col("item_type_code_name").isNull() == False).count()
+
+freqTable = dfClean.groupBy("item_type_code_name") \
+               .count() \
+               .withColumnRenamed('count', 'cnt_per_group') \
+               .withColumn('perc_of_count_total', ( col('cnt_per_group') / tot) * 100 ) \
+               .orderBy("cnt_per_group", ascending=False)
+
+freqTable.show(50, False)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Reduce dimensionality by using thresholding.  
+# MAGIC Use the cuttoff of 3%, categorize levels with 3% or less as other
+
+# COMMAND ----------
+
+otherRows    = freqTable.filter("perc_of_count_total < 3")
+otherFields = [row['item_type_code_name'] for row in otherRows.select("item_type_code_name").collect()]
+
+
+dfClean = dfClean.withColumn("item_type_code_name", when( col("item_type_code_name").isin(otherFields), "Other" ).otherwise(col("item_type_code_name")) )
+
+# Display new values
+dfClean.groupBy("item_type_code_name").count().orderBy("count", ascending=False).show(50, False)
 
 
 # COMMAND ----------
+
 
 
 
