@@ -31,6 +31,15 @@ dfDesc = spark.read.format('com.databricks.spark.csv').options(header='true', in
 
 # COMMAND ----------
 
+# DBTITLE 1,Display Variable Descriptions
+import pandas as pd
+
+pd.set_option('display.max_colwidth', None)
+dfPanda = dfDesc.toPandas()
+dfPanda
+
+# COMMAND ----------
+
 # DBTITLE 1,Display Variable Categories
 from pyspark.sql.functions import col
 
@@ -227,6 +236,7 @@ dfClean = dfRaw
 # COMMAND ----------
 
 # DBTITLE 1,Count Default / Empty Dates
+from pyspark.sql.functions import count, col
 # Count Default / Empty Dates
 
 for f in intervalFields:
@@ -301,6 +311,7 @@ freqTable.show(50, False)
 
 # COMMAND ----------
 
+# DBTITLE 1,Convert Below 3% to Other
 otherRows    = freqTable.filter("perc_of_count_total < 3")
 otherFields = [row['item_type_code_name'] for row in otherRows.select("item_type_code_name").collect()]
 
@@ -315,6 +326,53 @@ dfClean.groupBy("item_type_code_name").count().orderBy("count", ascending=False)
 
 
 
+
+# COMMAND ----------
+
+# DBTITLE 1,Display Nominal vs Interval Associations
+import pandas as pd
+import numpy as np
+
+# Check data associations to categorical data
+# Use a small random sample to speed up processing
+df = dfClean.sample(withReplacement=False, fraction=0.1, seed=11875884).toPandas()
+for inter in intervalFields:
+  for nom in nominalFields:
+    print (inter, 'vs', nom)
+    # Convert null dates to 1900-01-01
+    df[inter] = df[inter].replace(np.nan, '1900-01-01 00:00:00', regex=True)
+    # Convert date times to year month
+    df[inter] = pd.to_datetime(df[inter]).map(lambda x: x.strftime('%Y-%m'))
+    # Create plots
+    (df
+     .groupby([inter, nom])
+     .size()
+     .unstack()
+     .plot.bar()
+    )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC - scoring_type_code vs min_student_start_datetime
+# MAGIC   - "[unassigned]" is only on 1900-01
+# MAGIC   - "[unassigned]" used when student hasn't started
+# MAGIC   
+# MAGIC - item_type_code_name vs min_student_start_datetime
+# MAGIC   - never assigned to 1900-01 
+# MAGIC   - Not assigned until student starts
+# MAGIC   
+# MAGIC - assignment_final_submission_date vs response_correctness
+# MAGIC   - “[unassigned]” only on 1900-01
+# MAGIC   - Never scored unless submitted
+# MAGIC   
+# MAGIC - assignment_due_date vs response_correctness
+# MAGIC   - “[unassigned]” only on 1900-01
+# MAGIC   - If it’s not due (maybe never assigned, it has no correctness)
+# MAGIC 
+# MAGIC - assignement_start_date & max_student_stop_datetime vs assigned_item_status 
+# MAGIC    - 2/2020 - 5/2020 higher number of manual scored
+# MAGIC    - Could be given a default grade because it wasn't done or no access to computer to score properly
 
 # COMMAND ----------
 
