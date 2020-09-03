@@ -4,6 +4,23 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Define Functions
+def cramers_v(confusion_matrix):
+    """ calculate Cramers V statistic for categorial-categorial association.
+        uses correction from Bergsma and Wicher,
+        Journal of the Korean Statistical Society 42 (2013): 323-328
+    """
+    chi2 = ss.chi2_contingency(confusion_matrix)[0]
+    n = confusion_matrix.sum()
+    phi2 = chi2 / n
+    r, k = confusion_matrix.shape
+    phi2corr = max(0, phi2 - ((k-1)*(r-1))/(n-1))
+    rcorr = r - ((r-1)**2)/(n-1)
+    kcorr = k - ((k-1)**2)/(n-1)
+    return np.sqrt(phi2corr / min((kcorr-1), (rcorr-1)))
+
+# COMMAND ----------
+
 # DBTITLE 1,Load Assessment Items Data
 # Load Assessment Items Data
 from pyspark import SparkFiles
@@ -113,6 +130,15 @@ for f in nominalFields:
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC - learner_attempt_status of "fully scored"
+# MAGIC   - The tests with a final score
+# MAGIC   - We will be analyzing only these scores
+# MAGIC - item_type_code_name: 57,745 null values
+# MAGIC - response_correctness: 61,047 null values
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC #### Null Values
 # MAGIC - response_correctness
 # MAGIC   - Investigate further
@@ -120,7 +146,8 @@ for f in nominalFields:
 # MAGIC - item_type_code_name
 # MAGIC   - Investigate further
 # MAGIC   - Could be related to unstarted or unanswered questions
-# MAGIC #### large number of categorical values
+# MAGIC 
+# MAGIC #### Large number of categorical values
 # MAGIC - item_type_code_name
 # MAGIC   - Need to transform by reclassifying to reduce number of categories
 # MAGIC   
@@ -159,14 +186,22 @@ for f in continousFields:
 
 # COMMAND ----------
 
-# DBTITLE 1,Null Numerical / Continuous Variables
+# DBTITLE 1,Null and Zero Numerical / Continuous Variables
 from pyspark.sql.functions import count, when, col
 
 for c in continousFields:
   print(c)
   dfRaw.agg(
-    count(when(col(c).isNull(), c)).alias("null")
+    count(when(col(c).isNull(), c)).alias("null"),
+    count(when(col(c) == 0, c)).alias("zero")
   ).show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC - possibile correlation between assignment_attempt_number and assignment_max_attempts
+# MAGIC   - both have 1566 zero values
+# MAGIC - final_score_unweighted has 83,670 zero values
 
 # COMMAND ----------
 
@@ -225,8 +260,8 @@ sqlContext.sql("SELECT count(distinct is_deleted) FROM raw_data WHERE is_deleted
 
 # COMMAND ----------
 
-# DBTITLE 1,Create Clean Data Frame
-dfClean = dfRaw
+# DBTITLE 1,Create Clean Data Frame of Only "Fully Scored" 
+dfClean = dfRaw.filter("learner_attempt_status = 'fully scored'")
 
 # COMMAND ----------
 
@@ -275,7 +310,107 @@ else:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC All default dates converted
+# MAGIC ##### All default dates converted
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Why Are Empty Dates Empty
+
+# COMMAND ----------
+
+# DBTITLE 1,Save Dataframe as View
+# Save as database view
+dfClean.createOrReplaceTempView("clean_data")
+
+# COMMAND ----------
+
+# DBTITLE 1,Count Empty Dates
+from pyspark.sql.functions import count, col
+# Count Default / Empty Dates
+
+for f in intervalFields:
+  count = dfClean.filter(col(f).isNull() == True).count()
+  print (f,"=", count)
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC Are the following related?
+# MAGIC - assignment_due_date, assignment_final_submission_date and assignment_start_date have 1566 empty dates
+# MAGIC - assignment_attempt_number and assignment_max_attempts have 1566 records with the value 0
+# MAGIC - there are 1566 records with the response_correctness "[unassigned]" 
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC -- Count the records
+# MAGIC SELECT count(*)
+# MAGIC FROM clean_data
+# MAGIC WHERE assignment_due_date IS NULL 
+# MAGIC   AND assignment_final_submission_date IS NULL
+# MAGIC   AND assignment_start_date IS NULL
+# MAGIC   AND assignment_attempt_number = 0 
+# MAGIC   AND assignment_max_attempts = 0
+# MAGIC   AND response_correctness = '[unassigned]';
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Yes they are releated
+# MAGIC - The same records all have 1566 empty
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Does the same 1566 also include these
+# MAGIC - student_start_datetime = 749
+# MAGIC - student_stop_datetime = 749
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC -- Count the records
+# MAGIC SELECT count(*)
+# MAGIC FROM clean_data
+# MAGIC WHERE student_start_datetime IS NULL
+# MAGIC   AND student_stop_datetime IS NULL
+# MAGIC   AND assignment_due_date IS NULL 
+# MAGIC   AND assignment_final_submission_date IS NULL
+# MAGIC   AND assignment_start_date IS NULL
+# MAGIC   AND assignment_attempt_number = 0 
+# MAGIC   AND assignment_max_attempts = 0
+# MAGIC   AND response_correctness = '[unassigned]';
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC They do not
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Does the same 1566 also include these
+# MAGIC - was_fully_scored_datetime = 750
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC -- Count the records
+# MAGIC SELECT count(*)
+# MAGIC FROM clean_data
+# MAGIC WHERE was_fully_scored_datetime IS NULL
+# MAGIC   AND assignment_due_date IS NULL 
+# MAGIC   AND assignment_final_submission_date IS NULL
+# MAGIC   AND assignment_start_date IS NULL
+# MAGIC   AND assignment_attempt_number = 0 
+# MAGIC   AND assignment_max_attempts = 0
+# MAGIC   AND response_correctness = '[unassigned]';
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC They do not
 
 # COMMAND ----------
 
@@ -286,11 +421,27 @@ else:
 
 # DBTITLE 1,Existing Categories
 # Before Categories
-catResults = dfClean.filter(col("item_type_code_name").isNull() == False).groupBy("item_type_code_name").count().orderBy("count", ascending=False).toPandas()
-catResults.plot.bar(x='item_type_code_name', y='count')
+dfClean.select("item_type_code_name").distinct().orderBy("item_type_code_name").show(50, False)
+
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Combine Suffix Levels
+# MAGIC - The levels with the suffix Response (ex: FillinBlankResponse) is the same type of question as level without the suffix (ex: fillInTheBlank)
+
+# COMMAND ----------
+
+# Combine fillInTheBlank and FillinBlankResponse 
+dfClean = dfClean.withColumn("item_type_code_name", when( col("item_type_code_name") == "FillinBlankResponse", "fillInTheBlank" ).otherwise(col("item_type_code_name")) )
+
+# Combine multipleChoice and MultipleChoiceResponse 
+dfClean = dfClean.withColumn("item_type_code_name", when( col("item_type_code_name") == "MultipleChoiceResponse", "multipleChoice" ).otherwise(col("item_type_code_name")) )
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Display Frequency of Levels
 from pyspark.sql.functions import col, round
 
 tot = dfClean.filter(col("item_type_code_name").isNull() == False).count()
@@ -306,17 +457,15 @@ freqTable.show(50, False)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Reduce dimensionality by using thresholding.  
-# MAGIC Use the cuttoff of 3%, categorize levels with 3% or less as other
+# MAGIC We only want four levels, so convert everything below 6% to other
 
 # COMMAND ----------
 
-# DBTITLE 1,Convert Below 3% to Other
-otherRows    = freqTable.filter("perc_of_count_total < 3")
+# DBTITLE 1,Convert Below 6% to Other
+otherRows    = freqTable.filter("perc_of_count_total < 6")
 otherFields = [row['item_type_code_name'] for row in otherRows.select("item_type_code_name").collect()]
 
-
-dfClean = dfClean.withColumn("item_type_code_name", when( col("item_type_code_name").isin(otherFields), "Other" ).otherwise(col("item_type_code_name")) )
+dfClean = dfClean.withColumn("item_type_code_name", when( col("item_type_code_name").isin(otherFields) | col("item_type_code_name").isNull() , "Other" ).otherwise(col("item_type_code_name")) )
 
 # Display new values
 dfClean.groupBy("item_type_code_name").count().orderBy("count", ascending=False).show(50, False)
@@ -324,61 +473,193 @@ dfClean.groupBy("item_type_code_name").count().orderBy("count", ascending=False)
 
 # COMMAND ----------
 
-
-
-
-# COMMAND ----------
-
-# DBTITLE 1,Display Nominal vs Interval Associations
-import pandas as pd
-import numpy as np
-
-# Check data associations to categorical data
-# Use a small random sample to speed up processing
-df = dfClean.sample(withReplacement=False, fraction=0.1, seed=11875884).toPandas()
-for inter in intervalFields:
-  for nom in nominalFields:
-    print (inter, 'vs', nom)
-    # Convert null dates to 1900-01-01
-    df[inter] = df[inter].replace(np.nan, '1900-01-01 00:00:00', regex=True)
-    # Convert date times to year month
-    df[inter] = pd.to_datetime(df[inter]).map(lambda x: x.strftime('%Y-%m'))
-    # Create plots
-    (df
-     .groupby([inter, nom])
-     .size()
-     .unstack()
-     .plot.bar()
-    )
+# DBTITLE 1,Save As clean_data View
+dfClean.createOrReplaceTempView("clean_data")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC - scoring_type_code vs min_student_start_datetime
-# MAGIC   - "[unassigned]" is only on 1900-01
-# MAGIC   - "[unassigned]" used when student hasn't started
-# MAGIC   
-# MAGIC - item_type_code_name vs min_student_start_datetime
-# MAGIC   - never assigned to 1900-01 
-# MAGIC   - Not assigned until student starts
-# MAGIC   
-# MAGIC - assignment_final_submission_date vs response_correctness
-# MAGIC   - “[unassigned]” only on 1900-01
-# MAGIC   - Never scored unless submitted
-# MAGIC   
-# MAGIC - assignment_due_date vs response_correctness
-# MAGIC   - “[unassigned]” only on 1900-01
-# MAGIC   - If it’s not due (maybe never assigned, it has no correctness)
-# MAGIC 
-# MAGIC - assignement_start_date & max_student_stop_datetime vs assigned_item_status 
-# MAGIC    - 2/2020 - 5/2020 higher number of manual scored
-# MAGIC    - Could be given a default grade because it wasn't done or no access to computer to score properly
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC # Data Conversion
+# MAGIC # Data Aggregation
 
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC CREATE TABLE answers_by_attempt AS (
+# MAGIC     SELECT a.learner_assignment_attempt_id,
+# MAGIC            count(a.assessment_item_response_id)   num_questions_answered
+# MAGIC     FROM (
+# MAGIC         SELECT DISTINCT learner_assignment_attempt_id, learner_assigned_item_attempt_id, assessment_item_response_id
+# MAGIC         FROM clean_data
+# MAGIC         WHERE learner_attempt_status = 'fully scored'
+# MAGIC     ) a
+# MAGIC     GROUP BY a.learner_assignment_attempt_id
+# MAGIC )
+
+# COMMAND ----------
+
+spark.sql("SELECT * FROM answers_by_attempt").printSchema()
+
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE scores AS (
+# MAGIC    SELECT DISTINCT (cl.learner_assignment_attempt_id)  AS attempt_id,
+# MAGIC                          cl.assessment_id,
+# MAGIC                          cl.learner_id,
+# MAGIC                          cl.section_id,
+# MAGIC                          cl.org_id,
+# MAGIC                          cl.final_score_unweighted AS num_final_score,
+# MAGIC                          cl.points_possible_unweighted AS num_possible_score,
+# MAGIC                          DATE(was_fully_scored_datetime) AS scored_date,
+# MAGIC                          cl.number_of_distinct_instance_items AS num_questions, -- number of questions
+# MAGIC                          aba.num_questions_answered
+# MAGIC          FROM clean_data cl
+# MAGIC          LEFT JOIN answers_by_attempt aba ON cl.learner_assignment_attempt_id = aba.learner_assignment_attempt_id
+# MAGIC          WHERE learner_attempt_status = 'fully scored'
+# MAGIC );
+
+# COMMAND ----------
+
+spark.sql("SELECT * FROM scores").printSchema()
+
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC --DROP TABLE learners;
+# MAGIC CREATE TABLE learners AS (
+# MAGIC          SELECT learner_id,
+# MAGIC                 section_id,
+# MAGIC                 org_id,
+# MAGIC                 MIN( DATE(was_fully_scored_datetime) ) AS min_scored_date,
+# MAGIC                 MAX( DATE(was_fully_scored_datetime) ) AS max_scored_date,
+# MAGIC                 DATEDIFF( MAX(DATE(was_fully_scored_datetime)), MIN(DATE(was_fully_scored_datetime)) ) AS days
+# MAGIC          FROM clean_data
+# MAGIC          GROUP BY learner_id, section_id, org_id
+# MAGIC );
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE sections AS (
+# MAGIC          SELECT section_id,
+# MAGIC                 MIN(DATE(was_fully_scored_datetime)) AS min_scored_date,
+# MAGIC                 MAX(DATE(was_fully_scored_datetime)) AS max_scored_date,
+# MAGIC                 DATEDIFF( MAX(DATE(was_fully_scored_datetime)), MIN(DATE(was_fully_scored_datetime)) ) AS days
+# MAGIC          FROM clean_data
+# MAGIC          GROUP BY section_id
+# MAGIC      );
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE assessments AS (
+# MAGIC          SELECT assessment_id,
+# MAGIC                 MIN(DATE(was_fully_scored_datetime)) AS min_scored_date,
+# MAGIC                 MAX(DATE(was_fully_scored_datetime)) AS max_scored_date,
+# MAGIC                 DATEDIFF( MAX(DATE(was_fully_scored_datetime)), MIN(DATE(was_fully_scored_datetime)) ) AS days
+# MAGIC          FROM clean_data
+# MAGIC          GROUP BY assessment_id
+# MAGIC          )
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE orgs AS (
+# MAGIC          SELECT org_id,
+# MAGIC                 MIN(DATE(was_fully_scored_datetime)) AS min_scored_date,
+# MAGIC                 MAX(DATE(was_fully_scored_datetime)) AS max_scored_date,
+# MAGIC                 DATEDIFF( MAX(DATE(was_fully_scored_datetime)), MIN(DATE(was_fully_scored_datetime)) ) AS days
+# MAGIC          FROM clean_data
+# MAGIC          GROUP BY org_id
+# MAGIC      )
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE score_by_learner AS ( -- How learners performed on all assessments attempts
+# MAGIC          SELECT l.learner_id, --1126
+# MAGIC                 ROUND(AVG(s.num_final_score)) AS learner_num_final_score,
+# MAGIC                 ROUND(AVG(s.num_possible_score)) AS learner_num_possible_score,
+# MAGIC                 ROUND(AVG(s.num_questions_answered)) AS learner_num_questions_answered,
+# MAGIC                 ROUND(AVG(s.num_questions)) AS learner_num_questions,
+# MAGIC                 COUNT(*) AS learner_num_attempts,
+# MAGIC                 ROUND(AVG(l.days)) AS learner_days -- The number of days the learner took assessments
+# MAGIC 
+# MAGIC          FROM learners l,
+# MAGIC               scores s
+# MAGIC          WHERE l.learner_id = s.learner_id
+# MAGIC          GROUP BY l.learner_id
+# MAGIC      )
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE score_by_assessment  AS ( -- How all learners performed on attempts of an assessment
+# MAGIC          SELECT a.assessment_id, -- 329
+# MAGIC                 ROUND(AVG(s.num_final_score)) AS assessment_num_final_score,
+# MAGIC                 ROUND(AVG(s.num_possible_score)) AS assessment_num_possible_score,
+# MAGIC                 ROUND(AVG(s.num_questions_answered)) AS assessment_num_questions_answered,
+# MAGIC                 ROUND(AVG(s.num_questions)) AS assessment_num_questions,
+# MAGIC                 COUNT(*) AS assessment_num_attempts
+# MAGIC          FROM assessments a,
+# MAGIC               scores s
+# MAGIC          WHERE a.assessment_id = s.assessment_id
+# MAGIC          GROUP BY a.assessment_id
+# MAGIC      )
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE score_by_section  AS ( -- How all learners performed on attempts of an assessment by section
+# MAGIC          SELECT a.section_id, --490
+# MAGIC                 s.assessment_id,
+# MAGIC                 ROUND(AVG(s.num_final_score)) AS section_num_final_score,
+# MAGIC                 ROUND(AVG(s.num_possible_score)) AS section_num_possible_score,
+# MAGIC                 ROUND(AVG(s.num_questions_answered)) AS section_num_questions_answered,
+# MAGIC                 ROUND(AVG(s.num_questions)) AS section_num_questions,
+# MAGIC                 COUNT(*) AS section_num_attempts,
+# MAGIC                 ROUND(AVG(a.days)) AS section_days
+# MAGIC          FROM sections a,
+# MAGIC               scores s
+# MAGIC          WHERE a.section_id = s.section_id
+# MAGIC          GROUP BY a.section_id, s.assessment_id
+# MAGIC      )
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE TABLE score_by_org  AS (
+# MAGIC          SELECT a.org_id, --329
+# MAGIC                 s.assessment_id,
+# MAGIC                 ROUND(AVG(s.num_final_score)) AS organization_num_final_score,
+# MAGIC                 ROUND(AVG(s.num_possible_score)) AS organization_num_possible_score,
+# MAGIC                 ROUND(AVG(s.num_questions_answered)) AS organization_num_questions_answered,
+# MAGIC                 ROUND(AVG(s.num_questions)) AS organization_num_questions,
+# MAGIC                 COUNT(*) AS organization_num_attempts,
+# MAGIC                 ROUND(AVG(a.days)) AS organization_days
+# MAGIC          FROM orgs a,
+# MAGIC               scores s
+# MAGIC          WHERE a.org_id = s.org_id
+# MAGIC          GROUP BY a.org_id, s.assessment_id
+# MAGIC      )
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT attempt_id,
+# MAGIC        assessment_id,
+# MAGIC        learner_id,
+# MAGIC        section_id,
+# MAGIC        org_id,
+# MAGIC        scored_date,
+# MAGIC        num_final_score,
+# MAGIC        num_possible_score,
+# MAGIC        num_questions,
+# MAGIC        num_questions_answered
+# MAGIC FROM scores s LIMIT 10;
+
+# COMMAND ----------
+
+
