@@ -35,6 +35,54 @@ dfRaw = spark.read.format('com.databricks.spark.csv').options(header='true', inf
 
 # COMMAND ----------
 
+# DBTITLE 1,Count Deleted Observations
+from pyspark.sql.functions import countDistinct, count, when, col, min, max
+
+dfRaw.agg(
+  count( when(col("is_deleted") == True, f)).alias("num_deleted")
+).show(1, False)
+
+# COMMAND ----------
+
+from pyspark.sql.functions import col, countDistinct
+
+
+def relate_bar_chart(df, groupCol):
+    """ Give a dataframe, and a g
+    """
+
+    exCols = []
+
+    # Count distinct values of rows where assignment_start_date is null
+    dfCounts = df.groupBy(groupCol).agg(*(countDistinct(col(c)).alias("n_" + c) for c in df.columns))
+
+    # Filter fields to those with count of 1
+    for row in dfCounts.collect():
+      for c in dfCounts.columns:
+        if (row[c] != 1):
+          exCols.append(c)
+
+
+    exCols  = list(set(exCols)) # Get unique list
+    allCols = dfCounts.columns
+    inCols  = [col for col in allCols if col not in exCols] # Return cols not in exCols
+
+
+    dfCounts.select(*inCols, groupCol).toPandas().plot.bar(x=groupCol, figsize=(7,7))
+
+
+# COMMAND ----------
+
+df = dfClean.where(col("assignment_start_date").isNull())
+relate_bar_chart(df, "ced_assignment_type_code")
+
+# COMMAND ----------
+
+# DBTITLE 1,Remove Unused is_deleted Variable
+dfRaw = dfRaw.drop("is_deleted")
+
+# COMMAND ----------
+
 # DBTITLE 1,Load Assessment Variable Descriptions
 from pyspark import SparkFiles
 
@@ -248,13 +296,6 @@ for f in intervalFields:
 
 # COMMAND ----------
 
-# DBTITLE 1,Deleted Records Count
-# Deleted records count
-sqlContext.sql("SELECT count(distinct is_deleted) FROM raw_data WHERE is_deleted = true").show()
-
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC # Data Cleaning
 
@@ -463,9 +504,9 @@ freqTable.show(50, False)
 
 # DBTITLE 1,Convert Below 6% to Other
 otherRows    = freqTable.filter("perc_of_count_total < 6")
-otherFields = [row['item_type_code_name'] for row in otherRows.select("item_type_code_name").collect()]
+otherLevels  = [row['item_type_code_name'] for row in otherRows.select("item_type_code_name").collect()]
 
-dfClean = dfClean.withColumn("item_type_code_name", when( col("item_type_code_name").isin(otherFields) | col("item_type_code_name").isNull() , "Other" ).otherwise(col("item_type_code_name")) )
+dfClean = dfClean.withColumn("item_type_code_name", when( col("item_type_code_name").isin(otherLevels) | col("item_type_code_name").isNull() , "Other" ).otherwise(col("item_type_code_name")) )
 
 # Display new values
 dfClean.groupBy("item_type_code_name").count().orderBy("count", ascending=False).show(50, False)
@@ -484,6 +525,7 @@ dfClean.createOrReplaceTempView("clean_data")
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC DROP TABLE IF EXISTS answers_by_attempt;
 # MAGIC CREATE TABLE answers_by_attempt AS (
 # MAGIC     SELECT a.learner_assignment_attempt_id,
 # MAGIC            count(a.assessment_item_response_id)   num_questions_answered
@@ -503,6 +545,7 @@ spark.sql("SELECT * FROM answers_by_attempt").printSchema()
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC DROP TABLE IF EXISTS scores;
 # MAGIC CREATE TABLE scores AS (
 # MAGIC    SELECT DISTINCT (cl.learner_assignment_attempt_id)  AS attempt_id,
 # MAGIC                          cl.assessment_id,
@@ -527,7 +570,7 @@ spark.sql("SELECT * FROM scores").printSchema()
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC --DROP TABLE learners;
+# MAGIC DROP TABLE IF EXISTS learners;
 # MAGIC CREATE TABLE learners AS (
 # MAGIC          SELECT learner_id,
 # MAGIC                 section_id,
@@ -542,6 +585,7 @@ spark.sql("SELECT * FROM scores").printSchema()
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC DROP TABLE IF EXISTS sections;
 # MAGIC CREATE TABLE sections AS (
 # MAGIC          SELECT section_id,
 # MAGIC                 MIN(DATE(was_fully_scored_datetime)) AS min_scored_date,
@@ -554,6 +598,7 @@ spark.sql("SELECT * FROM scores").printSchema()
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC DROP TABLE IF EXISTS assessments;
 # MAGIC CREATE TABLE assessments AS (
 # MAGIC          SELECT assessment_id,
 # MAGIC                 MIN(DATE(was_fully_scored_datetime)) AS min_scored_date,
@@ -566,6 +611,7 @@ spark.sql("SELECT * FROM scores").printSchema()
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC DROP TABLE IF EXISTS orgs;
 # MAGIC CREATE TABLE orgs AS (
 # MAGIC          SELECT org_id,
 # MAGIC                 MIN(DATE(was_fully_scored_datetime)) AS min_scored_date,
@@ -578,6 +624,7 @@ spark.sql("SELECT * FROM scores").printSchema()
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC DROP TABLE IF EXISTS score_by_learner;
 # MAGIC CREATE TABLE score_by_learner AS ( -- How learners performed on all assessments attempts
 # MAGIC          SELECT l.learner_id, --1126
 # MAGIC                 ROUND(AVG(s.num_final_score)) AS learner_num_final_score,
@@ -596,6 +643,7 @@ spark.sql("SELECT * FROM scores").printSchema()
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC DROP TABLE IF EXISTS score_by_assessment;
 # MAGIC CREATE TABLE score_by_assessment  AS ( -- How all learners performed on attempts of an assessment
 # MAGIC          SELECT a.assessment_id, -- 329
 # MAGIC                 ROUND(AVG(s.num_final_score)) AS assessment_num_final_score,
@@ -612,6 +660,7 @@ spark.sql("SELECT * FROM scores").printSchema()
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC DROP TABLE IF EXISTS score_by_section;
 # MAGIC CREATE TABLE score_by_section  AS ( -- How all learners performed on attempts of an assessment by section
 # MAGIC          SELECT a.section_id, --490
 # MAGIC                 s.assessment_id,
@@ -630,6 +679,7 @@ spark.sql("SELECT * FROM scores").printSchema()
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC DROP TABLE IF EXISTS score_by_org;
 # MAGIC CREATE TABLE score_by_org  AS (
 # MAGIC          SELECT a.org_id, --329
 # MAGIC                 s.assessment_id,
@@ -659,6 +709,86 @@ spark.sql("SELECT * FROM scores").printSchema()
 # MAGIC        num_questions,
 # MAGIC        num_questions_answered
 # MAGIC FROM scores s LIMIT 10;
+
+# COMMAND ----------
+
+intervalFields
+
+
+# COMMAND ----------
+
+spark.sql("SELECT * FROM clean_data LIMiT 20").printSchema()
+
+# COMMAND ----------
+
+# DBTITLE 1,How does assessment instance and assignment start date relate
+# MAGIC %sql
+# MAGIC select assessment_instance_id, 
+# MAGIC  section_id,
+# MAGIC  assessment_instance_attempt_id,
+# MAGIC  assignment_start_date
+# MAGIC FROM clean_data
+# MAGIC WHERE assessment_instance_attempt_id IS NOT NULL
+# MAGIC ORDER BY assessment_instance_id, assessment_instance_attempt_id, student_start_datetime LIMIT 100
+# MAGIC ;
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC The assignment start date is the same for every assessment_instance_id.  Looks like it's assigned with the instance is created
+
+# COMMAND ----------
+
+# DBTITLE 1,See if any null assignment_start_dates
+# MAGIC %sql
+# MAGIC SELECT COUNT(*) FROM clean_data WHERE assignment_start_date IS NULL;
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Hmm... there's that 1566 again.  Let's look at those records
+
+# COMMAND ----------
+
+dfDesc.select('field').show(40, False)
+
+# COMMAND ----------
+
+# DBTITLE 1,View records with null assignment_start_date
+# MAGIC %sql
+# MAGIC SELECT * FROM clean_data WHERE assignment_start_date IS NULL;
+
+# COMMAND ----------
+
+# DBTITLE 1,How does start and stop dates relate
+# MAGIC %sql
+# MAGIC select assessment_instance_attempt_id,
+# MAGIC  max_student_stop_datetime,
+# MAGIC  student_start_datetime,
+# MAGIC  min_student_start_datetime
+# MAGIC FROM clean_data
+# MAGIC WHERE assessment_instance_attempt_id IS NOT NULL
+# MAGIC ORDER BY assessment_instance_attempt_id, student_start_datetime LIMIT 100
+# MAGIC ;
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC - assignment_start_date related to when it's assigned to a class?
+
+# COMMAND ----------
+
+# DBTITLE 1,How does in progress and start dates relate
+# MAGIC %sql
+# MAGIC select assessment_instance_attempt_id,
+# MAGIC  assignment_start_date,
+# MAGIC  student_start_datetime,
+# MAGIC  min_student_start_datetime,
+# MAGIC  was_in_progress_datetime,
+# MAGIC  FROM clean_data
+# MAGIC WHERE assessment_instance_attempt_id IS NOT NULL
+# MAGIC ORDER BY assessment_instance_attempt_id, student_start_datetime LIMIT 100
+# MAGIC ;
 
 # COMMAND ----------
 
