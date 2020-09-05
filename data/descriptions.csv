@@ -9,7 +9,7 @@ assignment_due_date,Categorical Interval,The date and time the assignment is due
 assignment_final_submission_date,Categorical Interval,The date and time the assignment was submitted for scoring.
 assignment_late_submission,Categorical Binary,True if the assignment was submitted late.
 assignment_max_attempts,Numeric Continuous,The number of times a learner can attempt the assessment.
-assignment_start_date,Categorical Interval,The date and time the assignment was started.
+assignment_start_date,Categorical Interval,The date and time a section is scheduled to start the assignment.
 ced_assignment_type_code,Categorical Nominal,"Type of assessment values: rubric, assessment, practice, clo, game."
 final_score_unweighted,Numeric Continuous,Numeric final score of the assessment.
 is_affecting_grade,Categorical Binary,True if the assessment item affects the learner's grade.
