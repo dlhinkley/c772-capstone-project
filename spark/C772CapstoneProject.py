@@ -21,6 +21,37 @@ def cramers_v(confusion_matrix):
 
 # COMMAND ----------
 
+# DBTITLE 1,Create Function
+from pyspark.sql.functions import col, countDistinct
+
+def relate_bar_chart(df, groupCol):
+    """ Give a dataframe, and a column to group by, create a bar chart of all 
+        variables that don't change as the group by changes
+    """
+
+    exCols = []
+
+    # Count distinct values of rows where assignment_start_date is null
+    dfCounts = df.groupBy(groupCol).agg(*(countDistinct(col(c)).alias("n_" + c) for c in df.columns))
+
+    # Filter fields to those with count of 1
+    for row in dfCounts.collect():
+      for c in dfCounts.columns:
+        if (row[c] != 1):
+          exCols.append(c)
+
+
+    exCols  = list(set(exCols)) # Get unique list
+    exCols.append("n_" + groupCol) # Exclude the column we group by
+    allCols = dfCounts.columns
+    inCols  = [col for col in allCols if col not in exCols] # Return cols not in exCols
+
+
+    dfCounts.select(*inCols, groupCol).toPandas().plot.bar(x=groupCol, figsize=(7,7))
+
+
+# COMMAND ----------
+
 # DBTITLE 1,Load Assessment Items Data
 # Load Assessment Items Data
 from pyspark import SparkFiles
@@ -39,42 +70,13 @@ dfRaw = spark.read.format('com.databricks.spark.csv').options(header='true', inf
 from pyspark.sql.functions import countDistinct, count, when, col, min, max
 
 dfRaw.agg(
-  count( when(col("is_deleted") == True, f)).alias("num_deleted")
+  count( when(col("is_deleted") == True, "is_deleted")).alias("num_deleted")
 ).show(1, False)
 
 # COMMAND ----------
 
-from pyspark.sql.functions import col, countDistinct
-
-
-def relate_bar_chart(df, groupCol):
-    """ Give a dataframe, and a g
-    """
-
-    exCols = []
-
-    # Count distinct values of rows where assignment_start_date is null
-    dfCounts = df.groupBy(groupCol).agg(*(countDistinct(col(c)).alias("n_" + c) for c in df.columns))
-
-    # Filter fields to those with count of 1
-    for row in dfCounts.collect():
-      for c in dfCounts.columns:
-        if (row[c] != 1):
-          exCols.append(c)
-
-
-    exCols  = list(set(exCols)) # Get unique list
-    allCols = dfCounts.columns
-    inCols  = [col for col in allCols if col not in exCols] # Return cols not in exCols
-
-
-    dfCounts.select(*inCols, groupCol).toPandas().plot.bar(x=groupCol, figsize=(7,7))
-
-
-# COMMAND ----------
-
-df = dfClean.where(col("assignment_start_date").isNull())
-relate_bar_chart(df, "ced_assignment_type_code")
+# MAGIC %md
+# MAGIC Zero observations deleted.  This variable can be deleted
 
 # COMMAND ----------
 
@@ -249,6 +251,7 @@ for c in continousFields:
 # MAGIC %md
 # MAGIC - possibile correlation between assignment_attempt_number and assignment_max_attempts
 # MAGIC   - both have 1566 zero values
+# MAGIC   - Needs further investigation
 # MAGIC - final_score_unweighted has 83,670 zero values
 
 # COMMAND ----------
@@ -269,8 +272,10 @@ for f in intervalFields:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Some dates have default values '2999-01-01 00:00:00' as max and '1900-01-01 00:00:00' as min
-# MAGIC These are substitutes for no value and will need to be replaced nulls
+# MAGIC Default Date Values
+# MAGIC - All variables have some dates have default values '2999-01-01 00:00:00' as max and '1900-01-01 00:00:00' as min
+# MAGIC - These are substitutes for no value and will need to be replaced nulls
+# MAGIC - Further investigation is needed as what the nulls mean
 
 # COMMAND ----------
 
@@ -352,6 +357,36 @@ else:
 
 # MAGIC %md
 # MAGIC ##### All default dates converted
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Investigations
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Does learner_attempt_status of "fully scored" relate to other variables
+
+# COMMAND ----------
+
+relate_bar_chart(dfClean, "learner_attempt_status")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC - The only column that is always the same value when "fully scored" is assignment_late_submission
+# MAGIC - What is that value?
+
+# COMMAND ----------
+
+dfClean.where(col("learner_attempt_status") == "fully scored").select('assignment_late_submission').distinct().show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC - The value is false
+# MAGIC - When learner_attempt_status is "fully scored", the assigment is never submitted late
 
 # COMMAND ----------
 
@@ -447,6 +482,11 @@ for f in intervalFields:
 # MAGIC   AND assignment_attempt_number = 0 
 # MAGIC   AND assignment_max_attempts = 0
 # MAGIC   AND response_correctness = '[unassigned]';
+
+# COMMAND ----------
+
+df = dfClean.where(col("assignment_start_date").isNull())
+relate_bar_chart(df, "ced_assignment_type_code")
 
 # COMMAND ----------
 
