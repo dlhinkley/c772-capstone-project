@@ -4,8 +4,63 @@
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC #### Data Exploration: Initialize Functions
+
+# COMMAND ----------
+
+# DBTITLE 1,Create Todo List
+# Create Todo list
+def init_todo():
+  global todoList
+  todoList = spark.createDataFrame(
+      [
+          ('Todo List', False),
+      ],
+      ['todo', 'finished']
+  )
+
+def add_todo(desc):
+  global todoList
+  newRow = spark.createDataFrame([(desc,False)])
+  todoList = todoList.union(newRow)
+  
+def list_todo():
+  global todoList
+  display(todoList)
+
+init_todo()
+
+
+# COMMAND ----------
+
 # DBTITLE 1,Create Function
-from pyspark.sql.functions import col, countDistinct
+from pyspark.sql.functions import col
+
+def filter_default(dfIn, f1, f2):
+  # Given a dataframe and two date field names, returns the dataframe removing records 
+  # where the f1 or f2 columns equal a default date
+  defaultDates = ["2999-01-01 00:00:00", "1900-01-01 00:00:00"]
+  return dfIn.filter( ~col(f1).isin(defaultDates) & ~col(f2).isin(defaultDates) )
+
+
+def date_stats(dfIn, f1, f2):
+  # Given a dataframe and two date field names, returns a new dataframe with the difference between
+  # the dates in minutes, hours and minutes
+  dfOut = filter_default(dfIn, f1, f2)
+
+  dfOut = dfOut.withColumn("minues", (col(f1).cast("long") - col(f2).cast("long"))/60.).select(f1, f2, "minues")
+
+  dfOut = dfOut.withColumn("hours", (col(f1).cast("long") - col(f2).cast("long"))/3600.).select(f1, f2, "hours", "minues")
+
+  return dfOut.withColumn("days", (col(f1).cast("long") - col(f2).cast("long"))/86400.).select("days", "hours", "minues")
+
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Create Function
+from pyspark.sql.functions import col, countDistinct, when
 
 def perfect_cor(df, groupCol):
     """ Give a dataframe, and a column to group by, create a bar chart of all 
@@ -33,6 +88,11 @@ def perfect_cor(df, groupCol):
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC #### Data Exploration: Load Data
+
+# COMMAND ----------
+
 # DBTITLE 1,Load Assessment Items Data
 # Load Assessment Items Data
 from pyspark import SparkFiles
@@ -57,6 +117,11 @@ spark.sparkContext.addFile(url)
 file = "file://" + SparkFiles.get("descriptions.csv")
 
 dfDesc = spark.read.format('com.databricks.spark.csv').options(header='true', inferschema='true').load(file)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Data Exploration: Summerize Data
 
 # COMMAND ----------
 
@@ -142,16 +207,7 @@ for f in nominalFields:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC - learner_attempt_status of "fully scored"
-# MAGIC   - The tests with a final score
-# MAGIC   - We will be analyzing only these scores
-# MAGIC - item_type_code_name: 57,745 null values
-# MAGIC - response_correctness: 61,047 null values
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Null Values
+# MAGIC ##### Null Values
 # MAGIC - response_correctness
 # MAGIC   - Investigate further
 # MAGIC   - Could be null because the question wasn't answered or a different method of scoring the question
@@ -159,10 +215,18 @@ for f in nominalFields:
 # MAGIC   - Investigate further
 # MAGIC   - Could be related to unstarted or unanswered questions
 # MAGIC 
-# MAGIC #### Large number of categorical values
+# MAGIC ##### Large number of categorical values
 # MAGIC - item_type_code_name
-# MAGIC   - Need to transform by reclassifying to reduce number of categories
+# MAGIC   - Need to transform by reclassifying to reduce number of levels
 # MAGIC   
+
+# COMMAND ----------
+
+# Create Todo list
+add_todo('Investigate null values in response_correctness')
+add_todo('Investigate null values in item_type_code_name')
+add_todo('Reduce number of levels in item_type_code_name')
+
 
 # COMMAND ----------
 
@@ -185,16 +249,24 @@ for f in continousFields:
 # MAGIC %md
 # MAGIC Normal Distribution
 # MAGIC - number_of_learners
+# MAGIC - possible outliers greaterthan 40
+# MAGIC - investigate further
 # MAGIC 
 # MAGIC Right Skewed
 # MAGIC - final_score_unweighted
 # MAGIC - number_of_distinct_instance_items
 # MAGIC - points_possible_unweighted
 # MAGIC 
-# MAGIC Two Values (0/1)
+# MAGIC Binary Values (0/1)
 # MAGIC - assignment_max_attempts
 # MAGIC - assignment_attempt_number
 # MAGIC - Appears binary but the variable name indicates it could have any values. The data only contains 1 and 0
+# MAGIC - Investigate further
+
+# COMMAND ----------
+
+add_todo("Investigate number_of_learners > 40 outliers")
+add_todo("Investigate binary variables assignment_attempt_number and assignment_max_attempts")
 
 # COMMAND ----------
 
@@ -215,6 +287,13 @@ for c in continousFields:
 # MAGIC   - both have 1566 zero values
 # MAGIC   - Needs further investigation
 # MAGIC - final_score_unweighted has 83,670 zero values
+# MAGIC   - possibly because not yet scored
+# MAGIC   - needs further investigation
+
+# COMMAND ----------
+
+add_todo('Investigate assignment_attempt_number and assignment_max_attempts both have 1566 values')
+add_todo('Investigate final_score_unweighted has 83,670 zero values')
 
 # COMMAND ----------
 
@@ -238,6 +317,11 @@ for f in intervalFields:
 # MAGIC - All variables have some dates have default values '2999-01-01 00:00:00' as max and '1900-01-01 00:00:00' as min
 # MAGIC - These are substitutes for no value and will need to be replaced nulls
 # MAGIC - Further investigation is needed as what the nulls mean
+
+# COMMAND ----------
+
+add_todo('Replace default dates with nulls')
+add_todo('Investigate why some dates are null')
 
 # COMMAND ----------
 
@@ -275,6 +359,93 @@ for f in binaryFields:
 # MAGIC Variables With Unary Values
 # MAGIC - assignment_late_submission and is_deleted
 # MAGIC - Variables will be removed
+
+# COMMAND ----------
+
+add_todo("Remove variables assignment_late_submission and is_deleted")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Data Exploration: Explore Data
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC - learner_attempt_status of "fully scored"
+# MAGIC   - The tests with a final score
+# MAGIC   - We will be analyzing only these scores
+# MAGIC - item_type_code_name: 57,745 null values
+# MAGIC - response_correctness: 61,047 null values
+
+# COMMAND ----------
+
+# DBTITLE 1,Cross-tabulation learner_attempt_status vs response_correctness
+import pandas as pd
+
+dfPd = dfRaw.toPandas()
+# Return cross-tabulation table of learner_attempt_status vs response_correctness adding counts for null values
+pd.crosstab(dfPd.learner_attempt_status.fillna('null'), dfPd.response_correctness.fillna('null'), margins=True, margins_name="Total")
+
+# COMMAND ----------
+
+# DBTITLE 1,Cross-tabulation learner_attempt_status vs assigned_item_status
+# Return cross-tabulation table of learner_attempt_status vs assigned_item_status adding counts for null values
+pd.crosstab(dfPd.learner_attempt_status.fillna('null'), dfPd.assigned_item_status.fillna('null'), margins=True, margins_name="Total")
+
+# COMMAND ----------
+
+# DBTITLE 1,Cross-tabulation learner_attempt_status vs scoring_type_code
+# Return cross-tabulation table of learner_attempt_status vs scoring_type_code adding counts for null values
+pd.crosstab(dfPd.learner_attempt_status.fillna('null'), dfPd.scoring_type_code.fillna('null'), margins=True, margins_name="Total")
+
+# COMMAND ----------
+
+# DBTITLE 1,Interval Correlations
+from pyspark.sql.functions import unix_timestamp, col
+import seaborn as sn
+import matplotlib.pyplot as plt
+
+dfPd =  filter_default(dfRaw).select(* (unix_timestamp(c).alias(c) for c in intervalFields) ).toPandas()
+
+corrMatrix = dfPd.corr()
+plt.figure(figsize=(10,12))
+sn.heatmap(corrMatrix, annot=True)
+plt.show()
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Interval Correlation Results
+# MAGIC - Perfectly correlated (1 or -1)
+# MAGIC   - assignment_due_date and..
+# MAGIC     - assignment_final_submission_date
+# MAGIC     - assignment_start_date
+# MAGIC     - Comments: Verify and possibly use only one
+# MAGIC - Highly correlated (> .7)
+# MAGIC   - max_student_start_datetime and min_student_stop_datetime
+# MAGIC     - Explanation: quizes are short and ending always follows starting
+# MAGIC   - scored_datetime and..
+# MAGIC     - student_stop_datetime
+# MAGIC     - was_fully_scored_datetime
+# MAGIC     - was_submitted_datetime_actual
+# MAGIC     - Explanation: actions closely follow stopping
+# MAGIC   - student_start_datetime and..
+# MAGIC     - student_stop_datetime
+# MAGIC     - was_inprogress_datetime
+# MAGIC     - Explanation: quizes are short and ending always follows starting
+# MAGIC   - student_stop_datetime and..
+# MAGIC     - scored_datetime
+# MAGIC     - student_start_datetime
+# MAGIC     - was_fully_scored_datetime
+# MAGIC     - Explanation: quizes are short and ending always follows starting
+
+# COMMAND ----------
+
+# DBTITLE 1,Difference Between Dates
+date_stats(dfRaw, "assignment_due_date", "assignment_final_submission_date").describe().show()
+
 
 # COMMAND ----------
 
@@ -387,7 +558,7 @@ rcDf.select(*cols).show(1)
 
 # MAGIC %md
 # MAGIC Explanation Null values in response_correctness Perfect Correlations
-# MAGIC - response_correctness is null when not scored
+# MAGIC - response_correctness is null when not scored (scoring_type_code = '[unassigned]')
 # MAGIC - All correlated fields appear to be default values when not scorred
 
 # COMMAND ----------
@@ -418,9 +589,10 @@ df.select(*second_half).show(1)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Yes they are related
+# MAGIC Yes they are all related
 # MAGIC - only occurs in one organization
 # MAGIC - could be record keeping differences
+# MAGIC - EXCLUDE?
 
 # COMMAND ----------
 
@@ -794,44 +966,6 @@ spark.sql("SELECT * FROM clean_data LIMiT 20").printSchema()
 # COMMAND ----------
 
 dfDesc.select('field').show(40, False)
-
-# COMMAND ----------
-
-# DBTITLE 1,View records with null assignment_start_date
-# MAGIC %sql
-# MAGIC SELECT * FROM clean_data WHERE assignment_start_date IS NULL;
-
-# COMMAND ----------
-
-# DBTITLE 1,How does start and stop dates relate
-# MAGIC %sql
-# MAGIC select assessment_instance_attempt_id,
-# MAGIC  max_student_stop_datetime,
-# MAGIC  student_start_datetime,
-# MAGIC  min_student_start_datetime
-# MAGIC FROM clean_data
-# MAGIC WHERE assessment_instance_attempt_id IS NOT NULL
-# MAGIC ORDER BY assessment_instance_attempt_id, student_start_datetime LIMIT 100
-# MAGIC ;
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC - assignment_start_date related to when it's assigned to a class?
-
-# COMMAND ----------
-
-# DBTITLE 1,How does in progress and start dates relate
-# MAGIC %sql
-# MAGIC select assessment_instance_attempt_id,
-# MAGIC  assignment_start_date,
-# MAGIC  student_start_datetime,
-# MAGIC  min_student_start_datetime,
-# MAGIC  was_in_progress_datetime,
-# MAGIC  FROM clean_data
-# MAGIC WHERE assessment_instance_attempt_id IS NOT NULL
-# MAGIC ORDER BY assessment_instance_attempt_id, student_start_datetime LIMIT 100
-# MAGIC ;
 
 # COMMAND ----------
 
