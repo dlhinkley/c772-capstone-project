@@ -1,4 +1,4 @@
-field,type,description
+field,type,description,category
 assessment_id,Categorical Identifier,ID of an Assessment.
 assessment_instance_attempt_id,Categorical Identifier,ID of a learner's attempt of an assessment.
 assessment_instance_id,Categorical Identifier,ID of a section's instance of an assessment.
@@ -27,13 +27,13 @@ min_student_start_datetime,Categorical Interval,The earliest date and time a lea
 number_of_distinct_instance_items,Numeric Continuous,Number of questions on assessment.
 number_of_learners,Numeric Continuous,The number of learner's assigned this instance of an assessement. The number of learners in a section.
 org_id,Categorical Identifier,ID of a organization containing multiple sections.
-points_possible_unweighted,Numeric Continuous,Numeric highest possible score of the assessment.
-response_correctness,Categorical Nominal,"Code indicating the correctness of the assessment item.  Example: incorrect, correct, partially_correct, etc."
-scored_datetime,Categorical Interval,The date and time the assessment attempt was scored.
-scoring_type_code,Categorical Nominal,"Code indicating the type of scoring for the assessment item.  Example: external, manual, automatic."
-section_id,Categorical Identifier,ID of a section containing multiple students.
-student_start_datetime,Categorical Interval,The date and time the learner began the attempt of this assessment.
-student_stop_datetime,Categorical Interval,The date and time the learner finished the attempt of this assessment.
-was_fully_scored_datetime,Categorical Interval,The date and time the assessment was scored.
-was_in_progress_datetime,Categorical Interval,The date and time the assessment attempt was in progress.
-was_submitted_datetime_actual,Categorical Interval,The date and time the assessment was submitted for scoring.
+points_possible_unweighted,Numeric Continuous,Numeric highest possible score of the assessment.,Score
+response_correctness,Categorical Nominal,"Code indicating the correctness of the assessment item.  Example: incorrect, correct, partially_correct, etc.",Assessment Item Score
+scored_datetime,Categorical Interval,The date and time the assessment attempt was scored.,Grade
+scoring_type_code,Categorical Nominal,"Code indicating the type of scoring for the assessment item.  Example: external, manual, automatic.",Assessment Item Score
+section_id,Categorical Identifier,ID of a section containing multiple students.,Section
+student_start_datetime,Categorical Interval,The date and time the learner began the attempt of this assessment.,Unknown
+student_stop_datetime,Categorical Interval,The date and time the learner finished the attempt of this assessment.,Unknown
+was_fully_scored_datetime,Categorical Interval,The date and time the assessment was scored.,Assignment Attempt
+was_in_progress_datetime,Categorical Interval,The date and time the assessment attempt was in progress.,Assignment Attempt
+was_submitted_datetime_actual,Categorical Interval,The date and time the assessment was submitted for scoring.,Assignment Attempt
