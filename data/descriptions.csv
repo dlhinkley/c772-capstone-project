@@ -1,19 +1,19 @@
 field,type,description,category
-assessment_id,Categorical Identifier,ID of an Assessment.
-assessment_instance_attempt_id,Categorical Identifier,ID of a learner's attempt of an assessment.
-assessment_instance_id,Categorical Identifier,ID of a section's instance of an assessment.
-assessment_item_response_id,Categorical Identifier,ID of a learners response to an assessment item.
-assigned_item_status,Categorical Nominal,"Code indicating the status of the assessment item.  Example: assigned, responded, offline_scorred, etc."
-assignment_attempt_number,Numeric Continuous,The nth time a certain learner attempted the assessement.
-assignment_due_date,Categorical Interval,The date and time the assignment is due.
-assignment_final_submission_date,Categorical Interval,The date and time the assignment was submitted for scoring.
-assignment_late_submission,Categorical Binary,True if the assignment was submitted late.
-assignment_max_attempts,Numeric Continuous,The number of times a learner can attempt the assessment.
-assignment_start_date,Categorical Interval,The date and time a section is scheduled to start the assignment.
-ced_assignment_type_code,Categorical Nominal,"Type of assessment values: rubric, assessment, practice, clo, game."
-final_score_unweighted,Numeric Continuous,Numeric final score of the assessment.
-is_affecting_grade,Categorical Binary,True if the assessment item affects the learner's grade.
-is_deleted,Categorical Binary,True if the record is deleted.
+assessment_id,Categorical Identifier,ID of an Assessment.,Assessment
+assessment_instance_attempt_id,Categorical Identifier,ID of a learner's attempt of an assessment.,Assessment Instance Attempt
+assessment_instance_id,Categorical Identifier,ID of a section's instance of an assessment.,Assessment Instance
+assessment_item_response_id,Categorical Identifier,ID of a learners response to an assessment item.,Unknown
+assigned_item_status,Categorical Nominal,"Code indicating the status of the assessment item.  Example: assigned, responded, offline_scorred, etc.",Unknown
+assignment_attempt_number,Numeric Continuous,The nth time a certain learner attempted the assessement.,Assignment Attempt
+assignment_due_date,Categorical Interval,The date and time the assignment is due.,Learner Assignment
+assignment_final_submission_date,Categorical Interval,The date and time the assignment was submitted for scoring.,Learner Assignment
+assignment_late_submission,Categorical Binary,True if the assignment was submitted late.,Learner Assignment
+assignment_max_attempts,Numeric Continuous,The number of times a learner can attempt the assessment.,Learner Assignment
+assignment_start_date,Categorical Interval,The date and time a section is scheduled to start the assignment.,Learner Assignment
+ced_assignment_type_code,Categorical Nominal,"Type of assessment values: rubric, assessment, practice, clo, game.",Unknown
+final_score_unweighted,Numeric Continuous,Numeric final score of the assessment.,Assessment Item Score
+is_affecting_grade,Categorical Binary,True if the assessment item affects the learner's grade.,Assignment
+is_deleted,Categorical Binary,True if the record is deleted.,Unknown
 is_force_scored,Categorical Binary,True if the assessment attempt was forced to be scored because the learner did not submit the assignment before the final possible submission datetime and the policy dictates forced scoring for that format.,Assignment Attempt
 is_manual_scoring_required,Categorical Binary,True if the assessment attempt requires a manual score. Changes to false after manual scoring is entered.,Assignment Attempt
 item_is_offline_scored,Categorical Binary,True if the assessment item was scored manually. Example: Essay questions.,Unknown
