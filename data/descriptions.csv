@@ -28,7 +28,7 @@ number_of_distinct_instance_items,Assignment,Numeric Continuous,Number of questi
 number_of_learners,Assignment,Numeric Continuous,The number of learner's assigned this instance of an assessement. The number of learners in a section.
 org_id,Organization,Categorical Identifier,ID of a organization containing multiple sections.
 points_possible_unweighted,Assignment Attempt,Numeric Continuous,Numeric highest possible score of the assessment.
-response_correctness,Item Attempt,Categorical Nominal,"Code indicating the correctness of the assessment item.  Example: incorrect, correct, partially_correct, etc."
+response_correctness,Item Attempt,Categorical Nominal,"Code indicating the correctness of the assessment item.  Values: correct, incorrect, partially_correct"
 scored_datetime,Assignment Attempt,Categorical Interval,The date and time the assessment attempt was scored.
 scoring_type_code,Item,Categorical Nominal,Code indicating the type of scoring for the assessment item.  Values: external and  automatic: scored by computer; manual and unassiged: manually by a human
 section_id,Section,Categorical Identifier,ID of a section containing multiple students.
