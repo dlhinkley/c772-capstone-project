@@ -4,3 +4,4 @@ Pipfile.lock
 .ipynb_checkpoints
 .data
 .shared_vars.db
+/juniper/spark-warehouse/
