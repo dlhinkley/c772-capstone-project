@@ -4,5 +4,6 @@ Pipfile.lock
 .ipynb_checkpoints
 .data
 .shared_vars.db
-/juniper/spark-warehouse/
-/juniper/investigation/spark-warehouse/
+/jupyter/spark-warehouse/
+/jupyter/investigation/spark-warehouse/
+/venv/
