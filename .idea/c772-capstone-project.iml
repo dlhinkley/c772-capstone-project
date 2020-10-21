@@ -3,6 +3,9 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/juniper/spark-warehouse" />
+      <excludeFolder url="file://$MODULE_DIR$/jupyter/.ipynb_checkpoints" />
+      <excludeFolder url="file://$MODULE_DIR$/jupyter/investigation/.ipynb_checkpoints" />
+      <excludeFolder url="file://$MODULE_DIR$/jupyter/summary/.ipynb_checkpoints" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.6 (c772-capstone-project)" jdkType="Python SDK" />
