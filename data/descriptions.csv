@@ -1,4 +1,4 @@
-field,type,description
+field,category,description
 assessment_id,Categorical Identifier,ID of an Assessment.
 assessment_instance_attempt_id,Categorical Identifier,ID of a learner's attempt of an assessment.
 assessment_instance_id,Categorical Identifier,ID of a section's instance of an assessment.
