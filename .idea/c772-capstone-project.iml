@@ -5,6 +5,7 @@
       <excludeFolder url="file://$MODULE_DIR$/juniper/spark-warehouse" />
       <excludeFolder url="file://$MODULE_DIR$/jupyter/.ipynb_checkpoints" />
       <excludeFolder url="file://$MODULE_DIR$/jupyter/investigation/.ipynb_checkpoints" />
+      <excludeFolder url="file://$MODULE_DIR$/jupyter/investigation/spark-warehouse" />
       <excludeFolder url="file://$MODULE_DIR$/jupyter/summary/.ipynb_checkpoints" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
