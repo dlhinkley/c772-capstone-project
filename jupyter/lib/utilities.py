@@ -1,30 +1,19 @@
 
 # Temp for local development
 import ssl
-import os
+from itertools import chain
+
+import matplotlib.pyplot as plt
 # os.environ['PYSPARK_PYTHON'] = '/Library/Frameworks/Python.framework/Versions/3.6/bin/python3.6'
-import tinydb as tinydb
-ssl._create_default_https_context = ssl._create_unverified_context
-
-types_global = None
-
 import numpy as np
 import pandas as pd
 import seaborn as sn
-
-from pyspark import SparkContext, SparkFiles, SQLContext
-from pyspark.sql.types import StructType, StructField, StringType, BooleanType
-
-from pyspark.sql import functions as F
-from pyspark.sql import types as T
-
-from itertools import chain
-import matplotlib.pyplot as plt
-from matplotlib.ticker import ScalarFormatter
-from statsmodels.graphics.mosaicplot import mosaic
 # https://github.com/shakedzy/dython
 from dython.nominal import associations
-
+from matplotlib.ticker import ScalarFormatter
+from pyspark import SparkContext, SQLContext
+from pyspark.sql import functions as F
+from pyspark.sql import types as T
 
 sc = SparkContext.getOrCreate()
 spark = SQLContext(sc)
@@ -36,6 +25,11 @@ dataDir = '/Users/duane.hinkley/PycharmProjects/c772-capstone-project/jupyter/.d
 
 if not os.path.exists(dataDir):
     os.makedirs(dataDir)
+
+ssl._create_default_https_context = ssl._create_unverified_context
+
+types_global = None
+
 
 def init_raw_df():
     rawDf = import_by_url('https://github.com/dlhinkley/c772-capstone-project/raw/master/data/assessment_items.csv')
@@ -91,14 +85,6 @@ def load_df(name):
     return spark.read.parquet(dataDir + name + ".parquet")
 
 
-def get_non_string_vars():
-    global shared
-    return group.identifierVars + group.continuousVars + group.intervalVars + group.binaryVars
-
-def get_all_vars():
-        return group.nominalVars + get_non_string_vars();
-
-
 from tinydb import TinyDB, Query
 # Create Todo list
 def init_todo():
@@ -118,7 +104,7 @@ def list_todo(finished = None):
   global td
 
   for item in td:
-    if (finished != None):
+    if (finished is not None):
         if (item['finished'] == finished):
            print(item)
     else:
@@ -143,7 +129,7 @@ init_todo()
 
 import os
 from pyspark import SparkFiles
-from datetime import datetime
+
 
 def import_by_url(url):
   # Given a url to a csv file, import and return a dataframe
@@ -307,7 +293,7 @@ def get_var_cats(dfColumns = False):
 # If dfColumns provied, return only values in dfColumns
 def get_var_types(dfColumns = False):
 
-    if (types_global == None):
+    if (types_global is None):
 
         type = dict()
         descDf = load_df('descDf')
@@ -483,7 +469,7 @@ def num_group_bar_chart(df, groupByVar, countVar, countAlias, title, ax = None):
 
   axa = pdDf.plot(groupByVar,countAlias, kind='bar', ax=ax, title=title)
   annotate_plot(axa)
-  if (ax == None):
+  if (ax is None):
     plt.show()
 
 
@@ -509,7 +495,7 @@ def mean_group_bar_chart(df, group1, group2, countVar, countAlias, title='', ax=
   axo = pdDf.plot.bar(group1,countAlias, ax=ax, title=title)
   annotate_plot(axo)
 
-  if (ax == None):
+  if (ax is None):
     plt.show()
 
 
@@ -863,7 +849,7 @@ def impute_timeliness_duration(df):
     return iqr_impute(df, 'timeliness_duration_mins')
 
 def remove_unassigned_response_correctness(df):
-    return filterDf.filter(
+    return df.filter(
           ( F.col('response_correctness').isNull() == True )
         | ( F.col('response_correctness') != '[unassigned]' )
     )
@@ -900,4 +886,4 @@ def swoe(df, col):
     return df.join(cntDf.select('item_type_code_name', 'item_type_code_name_swoe'), 'item_type_code_name')
 
 def encode_categories_as_swoe(df):
-    return swoe(df)
+    return swoe(df,None)
