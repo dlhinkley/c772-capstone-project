@@ -893,13 +893,15 @@ def create_target_var_from_raw_score(df):
     F.when(F.col('raw_score') > 0, 1).otherwise(0)
   )
 
+
 # Given a spark dataframe, name of categorical variable and name of target variable, add a column with the
 # weight of evidence value for the categorical variable
 #
-def add_weight_of_evidence(df, catVar, targetVar, smoothing = 0):
+def add_weight_of_evidence(df, catVar, targetVar, smoothing=0):
   woe = WOE_IV(df, [catVar], targetVar, 1, smoothing)
   woe.fit()
   return woe.transform(df)
+
 
 # Adds smoothed weight of evidence to provided column
 # c = smoothing parameter
@@ -907,24 +909,28 @@ def add_weight_of_evidence(df, catVar, targetVar, smoothing = 0):
 # cat = categorical variable name
 #
 # From SAS Certification Part 2, Lesson 3: Preparing the Input Variables
-def add_swoe(df, target, cat, c):
-    # Proportion of events in sample
-    p1 = df.agg( F.avg( F.col(target) ).alias('mean') ).collect()[0]['mean']
+def add_swoe(df, targetVar, catVar, c):
+  # Proportion of events in sample
+  p1 = df.agg(F.avg(F.col(targetVar)).alias('mean')).collect()[0]['mean']
 
-    # Get event and non event counts
-    cntDf =  df.groupBy(cat).agg(
-        F.sum( F.when( F.col(target) == 1, 1 ).otherwise(0)).alias('1'),
-        F.sum( F.when( F.col(target) == 0, 1 ).otherwise(0)).alias('0')
+  # Get event and non event counts
+  cntDf = df.groupBy(catVar).agg(
+    F.sum(F.when(F.col(targetVar) == 1, 1).otherwise(0)).alias('1'),
+    F.sum(F.when(F.col(targetVar) == 0, 1).otherwise(0)).alias('0')
+  )
+  swoeVar = catVar + '_swoe'
+  # Add swoe
+  # Formula:
+  #           # events + cp1
+  # ln( ----------------------- )
+  #     # nonevents + c(1 - p1)
+  cntDf = cntDf.withColumn(
+    swoeVar,
+    F.log(
+      (F.col('1') + c * p1)
+      /
+      (F.col('0') + c * (1 - p1))
     )
-    swoeVar = cat + '_swoe'
-    # Add swoe
-    # Formula:
-    #           # events + cp1
-    # ln( ----------------------- )
-    #     # nonevents + c(1 - p1)
-    cntDf = cntDf.withColumn(
-        swoeVar,
-       F.log(  (F.col('1') +  p1 * c)  / (F.col('0') +  (1 - p1) * c) )
-    )
-    # Append column to original table name
-    return df.join(cntDf.select('cat', swoeVar), 'cat')
+  )
+  # Append column to original table name
+  return df.join(cntDf.select(catVar, swoeVar), catVar)
