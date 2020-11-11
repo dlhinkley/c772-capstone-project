@@ -855,12 +855,15 @@ def get_iqr_filter(df, col):
 def iqr_impute(df, col):
   (lowFilter, highFilter, median) = get_iqr_filter(df, col)
   return df.withColumn(
-    col,
-    F.when(
-      F.col(col) > highFilter,
-      median
-    ).otherwise(F.col(col))
-  )
+      col + '_imputed',
+      (F.col(col) > highFilter),
+    ).withColumn(
+      col,
+      F.when(
+        F.col(col) > highFilter,
+        median
+      ).otherwise(F.col(col))
+    )
 
 
 def impute_item_attempt_duration(df):
