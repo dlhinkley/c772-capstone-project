@@ -23,7 +23,7 @@ spark = SparkSession(sc)
 import os
 import json
 
-dataDir = '/Users/duane.hinkley/PycharmProjects/c772-capstone-project/jupyter/.data/'
+dataDir = '/Users/duane.hinkley/PycharmProjects/c772-capstone-project/full-investigation/.data/'
 
 if not os.path.exists(dataDir):
   os.makedirs(dataDir)
